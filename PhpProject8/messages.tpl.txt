@@ -1,0 +1,20 @@
+{block name=messages}
+{if $msgs->isError()}
+<div class="messages error">
+    <ul>
+    {foreach $msgs->getErrors() as $msg}
+        <li>{$msg}</li>
+    {/foreach}
+    </ul>
+</div>
+{/if}
+{if $msgs->isInfo()}
+<div class="messages info">
+    <ul>
+    {foreach $msgs->getInfos() as $msg}
+        <li>{$msg}</li>
+    {/foreach}
+    </ul>
+</div>
+{/if}
+{/block}

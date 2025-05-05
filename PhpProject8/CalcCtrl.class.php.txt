@@ -1,0 +1,94 @@
+<?php
+namespace app\controllers;
+
+use app\forms\CalcForm;
+use app\transfer\CalcResult;
+use PDOException;
+
+class CalcCtrl {
+    private $form;
+    private $result;
+
+    public function __construct() {
+        $this->form = new CalcForm();
+        $this->result = new CalcResult();
+    }
+
+    public function getParams() {
+        $this->form->amount = getFromRequest('amount', true, 'Błędne wywołanie aplikacji: brak kwoty');
+        $this->form->rate = getFromRequest('rate', true, 'Błędne wywołanie aplikacji: brak oprocentowania');
+        $this->form->years = getFromRequest('years', true, 'Błędne wywołanie aplikacji: brak okresu');
+    }
+
+    public function validate() {
+        if (!getMessages()->isError()) {
+            if (empty(trim($this->form->amount))) {
+                getMessages()->addError('Wprowadź kwotę kredytu');
+            }
+            if (empty(trim($this->form->rate))) {
+                getMessages()->addError('Wprowadź oprocentowanie');
+            }
+            if (empty(trim($this->form->years))) {
+                getMessages()->addError('Wybierz okres spłaty');
+            }
+        }
+
+        if (!getMessages()->isError()) {
+            if (!is_numeric($this->form->amount) || $this->form->amount <= 0) {
+                getMessages()->addError('Kwota kredytu musi być liczbą dodatnią');
+            }
+            if (!is_numeric($this->form->rate) || $this->form->rate < 0) {
+                getMessages()->addError('Oprocentowanie musi być liczbą nieujemną');
+            }
+            if (!in_array($this->form->years, [1, 2, 3, 5, 10])) {
+                getMessages()->addError('Nieprawidłowy okres spłaty');
+            }
+        }
+
+        return !getMessages()->isError();
+    }
+
+    public function action_calcShow() {
+        getSmarty()->assign('form', $this->form);
+        getSmarty()->assign('result', $this->result);
+        getSmarty()->assign('user', isset($_SESSION['user']) ? unserialize($_SESSION['user']) : null);
+        getSmarty()->display('CalcView.tpl');
+    }
+
+    public function action_calcCompute() {
+        $this->getParams();
+
+        if ($this->validate()) {
+            $amount = floatval($this->form->amount);
+            $rate = floatval($this->form->rate) / 100;
+            $years = intval($this->form->years);
+            $months = $years * 12;
+
+            // Obliczenie raty annuitetowej
+            $monthly_rate = $rate / 12;
+            $monthly_payment = $amount * ($monthly_rate * pow(1 + $monthly_rate, $months)) / (pow(1 + $monthly_rate, $months) - 1);
+            $this->result->monthly_payment = number_format($monthly_payment, 2, '.', '');
+
+            // Zapis do bazy danych
+            try {
+                $user = unserialize($_SESSION['user']);
+                getDB()->insert('wyniki', [ // Zaktualizowana nazwa tabeli
+                    'data' => date('Y-m-d H:i:s'),
+                    'kwota' => $amount,
+                    'procent' => $this->form->rate,
+                    'lat' => $years,
+                    'rata' => $monthly_payment
+                ]);
+                getMessages()->addInfo('Pomyślnie zapisano obliczenia w bazie danych');
+            } catch (PDOException $e) {
+                getMessages()->addError('Wystąpił błąd podczas zapisu do bazy danych');
+                if (getConf()->debug) getMessages()->addError($e->getMessage());
+            }
+        }
+
+        getSmarty()->assign('form', $this->form);
+        getSmarty()->assign('result', $this->result);
+        getSmarty()->assign('user', isset($_SESSION['user']) ? unserialize($_SESSION['user']) : null);
+        getSmarty()->display('CalcView.tpl');
+    }
+}

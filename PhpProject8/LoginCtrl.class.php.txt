@@ -1,0 +1,51 @@
+<?php
+namespace app\controllers;
+
+use app\forms\LoginForm;
+use app\transfer\User;
+
+class LoginCtrl {
+    private $form;
+
+    public function __construct() {
+        $this->form = new LoginForm();
+    }
+
+    public function action_loginShow() {
+        getSmarty()->assign('form', $this->form);
+        getSmarty()->display('LoginView.tpl');
+    }
+
+    public function action_login() {
+        $this->form->login = getFromRequest('login', true, 'Błędne wywołanie aplikacji: brak loginu');
+        $this->form->pass = getFromRequest('pass', true, 'Błędne wywołanie aplikacji: brak hasła');
+
+        if (!getMessages()->isError()) {
+            if ($this->form->login == "admin" && $this->form->pass == "admin") {
+                $user = new User($this->form->login, 'admin');
+                $_SESSION['user'] = serialize($user);
+                addRole($user->role);
+                getMessages()->addInfo('Poprawnie zalogowano jako admin');
+                forwardTo('calcShow');
+            } elseif ($this->form->login == "user" && $this->form->pass == "user") {
+                $user = new User($this->form->login, 'user');
+                $_SESSION['user'] = serialize($user);
+                addRole($user->role);
+                getMessages()->addInfo('Poprawnie zalogowano jako user');
+                forwardTo('calcShow');
+            } else {
+                getMessages()->addError('Niepoprawny login lub hasło');
+            }
+        }
+
+        getSmarty()->assign('form', $this->form);
+        getSmarty()->display('LoginView.tpl');
+    }
+
+    public function action_logout() {
+        session_destroy();
+        $_SESSION = [];
+        getMessages()->addInfo('Pomyślnie wylogowano');
+        forwardTo('loginShow');
+    }
+}
